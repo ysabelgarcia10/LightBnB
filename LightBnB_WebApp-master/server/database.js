@@ -117,22 +117,78 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
 const getAllProperties = function(options, limit = 10) {
+  
+  // 1
+  const queryParams = [];
+  // 2
+  let queryString = `
+  SELECT properties.*, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
+  `;
+
+  // 3
+  if (options.city) {
+    queryParams.push(`%${options.city}%`);
+    queryString += `WHERE city LIKE $${queryParams.length} `;
+  };
+  
+  //OPTIONAL
+  if (options.minimum_price_per_night) {
+    const minPriceCents = options.minimum_price_per_night * 100
+    queryParams.push(`${minPriceCents}`);
+    queryString += `AND cost_per_night >= $${queryParams.length} `;
+  };
+  
+  //OPTIONAL
+  if (options.maximum_price_per_night) {
+    const maxPriceCents = options.maximum_price_per_night * 100
+    queryParams.push(`${maxPriceCents}`);
+    queryString += `AND cost_per_night <= $${queryParams.length} `;
+  };
+  
+  
+  // 4
+  queryString += `
+  GROUP BY properties.id`
+  
+  //OPTIONAL
+  if (options.minimum_rating) {
+    queryParams.push(`${options.minimum_rating}`);
+    queryString += `
+    HAVING avg(property_reviews.rating) >= $${queryParams.length} `;
+  };
+
+  //5
+  queryParams.push(limit);
+  queryString +=`
+  ORDER BY cost_per_night
+  LIMIT $${queryParams.length};
+  `;
+
+  // 5
+  console.log(options);
+  console.log("query string", queryString, "query params", queryParams);
+
+  // 6
+  return pool.query(queryString, queryParams).then((res) => res.rows);
+
 
   pool.query(
     `SELECT * FROM properties LIMIT $1`,
     [limit])
-  .then((result) => {
-    return (result.rows)})
-  .catch((err) => {
-    return (err.message)});
-
-  const limitedProperties = {};
-  for (let i = 1; i <= limit; i++) {
-    limitedProperties[i] = properties[i];
-  }
-  return Promise.resolve(limitedProperties);
+    .then((result) => {
+      return (result.rows)})
+      .catch((err) => {
+        return (err.message)});
+        
+        const limitedProperties = {};
+        for (let i = 1; i <= limit; i++) {
+          limitedProperties[i] = properties[i];
+        }
+        return Promise.resolve(limitedProperties);
 }
-exports.getAllProperties = getAllProperties;
+      exports.getAllProperties = getAllProperties;
 
 
 /**
